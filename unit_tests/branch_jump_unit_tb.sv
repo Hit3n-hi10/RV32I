@@ -48,7 +48,7 @@ module branch_jump_unit_tb;
         src_reg_2 = 0;
         imm       = 0;
         pc_in     = 0;
-
+        #10
         repeat (1) @(posedge clk);
         rst = 0;
 
