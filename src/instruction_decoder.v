@@ -27,7 +27,8 @@ module instruction_decoder(
     output reg [4:0] rs1,
     output reg [4:0] rs2,
     output reg [2:0] funct3,
-    output reg [6:0] funct7
+    output reg [6:0] funct7,
+    output reg illegal_instr
     );
     always @(*) begin 
         opcode = instruction[6:0];
@@ -36,6 +37,7 @@ module instruction_decoder(
         rs2 = 0;
         funct3 = 0;
         funct7 = 0;
+        illegal_instr = 0;
         
         case (opcode) 
             
@@ -52,13 +54,30 @@ module instruction_decoder(
             // I TYPE Instructions: addi, slti, sltiu, xori, ori, andi,
             //                      slli, srli, srai, lb, lh, lw, lbu, 
             //                      lhu, jalr
-            7'b0010011,
-            7'b0000011,
-            7'b1100111: begin
+            7'b0010011 : begin
                 rd = instruction[11:7];
                 funct3 = instruction[14:12];
                 rs1 = instruction[19:15];
+                
+            // Needed for SLLI/SRLI/SRAI
+            if (funct3 == 3'b001 || funct3 == 3'b101)
+                funct7 = instruction[31:25];
+        
             end 
+
+            // LOAD : lb, lh, lw, lbu, lhu
+            7'b0000011: begin
+                rd     = instruction[11:7];
+                funct3 = instruction[14:12];
+                rs1    = instruction[19:15];
+            end
+
+           // JALR
+            7'b1100111: begin
+                rd     = instruction[11:7];
+                funct3 = instruction[14:12];
+                rs1    = instruction[19:15];
+            end
                     
             // S TYPE Instructions: sb, sh, sw
             7'b0100011: begin
@@ -83,6 +102,10 @@ module instruction_decoder(
             // J TYPE Instructions: jal
             7'b1101111: begin
                 rd = instruction[11:7];
+            end
+            
+            default: begin
+                illegal_instr = 1;
             end
             
         endcase
