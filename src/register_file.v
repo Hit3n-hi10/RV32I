@@ -1,3 +1,28 @@
+// Inputs:
+//   clk              - Clock signal
+//   rst              - Active-high reset
+//   regwrite         - Register write enable (from Control Unit)
+//   rs1[4:0]         - Source Register 1 address
+//   rs2[4:0]         - Source Register 2 address
+//   rd[4:0]          - Destination Register address
+//   wd[31:0]         - Write data from ALU/Write-back stage
+//
+// Outputs:
+//   rd1[31:0]        - Data read from source register rs1
+//   rd2[31:0]        - Data read from source register rs2
+//
+// Internal Storage:
+//   registers[0:31]  - 32 General Purpose Registers
+//                       each 32 bits wide
+//
+// Specifications:
+//   Number of Registers = 32
+//   Register Width      = 32 bits
+//   Address Width       = 5 bits
+//   x0 Register         = Hardwired to 0
+//   Read Ports          = 2 (Combinational)
+//   Write Ports         = 1 (Synchronous)
+
 module register_file(
 input clk,
 input rst,
