@@ -9,7 +9,6 @@
 //   read_data[31:0]  - 32-bit data output
 //
 // Tests         : 20 test cases, all passing
-`timescale 1ns/1ps
 module tb_data_memory();
 
 localparam N = 32;
