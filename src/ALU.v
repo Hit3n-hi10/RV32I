@@ -19,7 +19,7 @@ module ALU(
     parameter ALU_SRA = 4'b1001;
     
     always@(*) begin
-    	result = 32’d0;
+    	result = 32'd0;
     case(alu_op)
         ALU_ADD: result = A+B;
         ALU_SUB: result = A-B;
