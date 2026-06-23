@@ -1,5 +1,5 @@
 module ALU_Control(
-    input [1:0] ALU_op,
+    input [1:0] ALUOp,
     input [2:0] funct3,
     input [6:0] funct7,
     output reg [3:0] alu_op 
@@ -19,7 +19,7 @@ module ALU_Control(
     
     always@(*) begin
         alu_op = ALU_ADD;
-    case(ALU_op)
+    case(ALUOp)
         2'b00: alu_op = ALU_ADD;
         2'b01: alu_op = ALU_SUB;
         
@@ -52,7 +52,3 @@ module ALU_Control(
         default: alu_op = ALU_ADD;
         
     endcase
-    
-    end
-    
-endmodule
