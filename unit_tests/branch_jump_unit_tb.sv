@@ -19,10 +19,10 @@ logic jump_taken;
 
 parameter BEQ  = 3'b000;
 parameter BNE  = 3'b001;
-parameter BLT  = 3'b010;
-parameter BGE  = 3'b011;
-parameter BLTU = 3'b100;
-parameter BGEU = 3'b101;
+parameter BLT  = 3'b100;
+parameter BGE  = 3'b101;
+parameter BLTU = 3'b110;
+parameter BGEU = 3'b111;
 
 Branch_Jump_Unit x(
     .clk(clk),
