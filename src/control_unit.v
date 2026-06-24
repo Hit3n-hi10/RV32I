@@ -3,7 +3,7 @@ module control_unit(
         input [2:0]funct3,
         input [6:0]funct7,
         output reg RegWrite, MemRead, MemWrite,
-        MemToReg, ALUSrc, Branch, Jump, Jalr
+        MemToReg, ALUSrc, Branch, Jump, Jalr,
         output reg [1:0]ALUOp, 
         output reg [2:0] imm_sel
     );
@@ -110,6 +110,7 @@ module control_unit(
                 ALUSrc = 0;
                 Branch = 0;
                 Jump = 0;
+                Jalr = 0;
                 ALUOp = 2'b00;
                 imm_sel = I_Type;
             end
