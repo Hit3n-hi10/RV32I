@@ -38,7 +38,7 @@ module branch(
             end
 
             // BLT
-            3'b010: begin
+            3'b100: begin
                 if($signed(src_reg_1) < $signed(src_reg_2)) begin
                     brh_taken = 1'b1;
                     pc_out = pc_in + imm;
@@ -50,7 +50,7 @@ module branch(
             end
 
             // BGE
-            3'b011: begin
+            3'b101: begin
                 if($signed(src_reg_1) >= $signed(src_reg_2)) begin
                     brh_taken = 1'b1;
                     pc_out = pc_in + imm;
@@ -62,7 +62,7 @@ module branch(
             end
 
             // BLTU
-            3'b100: begin
+            3'b110: begin
                 if(src_reg_1 < src_reg_2) begin
                     brh_taken = 1'b1;
                     pc_out = pc_in + imm;
@@ -74,7 +74,7 @@ module branch(
             end
 
         // BGEU
-        3'b101: begin
+        3'b111: begin
                 if(src_reg_1 >= src_reg_2) begin
                     brh_taken = 1'b1;
                     pc_out = pc_in + imm;
