@@ -5,7 +5,7 @@ module control_unit_tb;
     logic MemWrite;
     logic MemToReg; 
     logic ALUSrc;
-    logic Branch, Jump;
+    logic Branch, Jump, Jalr;
     logic [1:0]ALUOp; 
     logic [2:0] imm_sel;
     
@@ -18,6 +18,7 @@ module control_unit_tb;
         .ALUSrc(ALUSrc), 
         .Branch(Branch), 
         .Jump(Jump),
+        .Jalr(Jalr),
         .ALUOp(ALUOp), 
         .imm_sel(imm_sel)
     );
@@ -34,6 +35,7 @@ module control_unit_tb;
         input logic exp_ALUSrc,
         input logic exp_Branch,
         input logic exp_Jump,
+        input logic exp_Jalr,
         input logic [1:0] exp_ALUOp,
         input logic [2:0] exp_imm_sel
     );
@@ -50,6 +52,7 @@ module control_unit_tb;
                 ALUSrc !== exp_ALUSrc ||
                 Branch !== exp_Branch ||
                 Jump !== exp_Jump ||
+                Jalr !== exp_Jalr ||
                 ALUOp !== exp_ALUOp ||
                 imm_sel !== exp_imm_sel ) begin
                 
@@ -61,25 +64,25 @@ module control_unit_tb;
                              exp_RegWrite, exp_MemRead,
                              exp_MemWrite, exp_MemToReg);
             
-                    $display("ALUSrc=%b Branch=%b Jump=%b ALUOp=%b imm_sel=%b",
+                    $display("ALUSrc=%b Branch=%b Jump=%b Jalr=%b ALUOp=%b imm_sel=%b",
                              exp_ALUSrc, exp_Branch,
-                             exp_Jump, exp_ALUOp,
-                             exp_imm_sel);
+                             exp_Jump, exp_Jalr,
+                             exp_ALUOp, exp_imm_sel);
             
                     $display("Actual:");
                     $display("RegWrite=%b MemRead=%b MemWrite=%b MemToReg=%b",
                              RegWrite, MemRead,
                              MemWrite, MemToReg);
             
-                    $display("ALUSrc=%b Branch=%b Jump=%b ALUOp=%b imm_sel=%b",
+                    $display("ALUSrc=%b Branch=%b Jump=%b Jalr=%b ALUOp=%b imm_sel=%b",
                              ALUSrc, Branch,
-                             Jump, ALUOp,
+                             Jump, Jalr, ALUOp,
                              imm_sel);
             
                     fail_count++;
                end
                else begin 
-                   $display("TESTCASE PASSED : Opcode = %b", opcode);
+                   $display("TESTCASE PASSED : Opcode = %b", opcode_in);
                     pass_count++;
                 end 
         end
@@ -97,7 +100,7 @@ module control_unit_tb;
             1'b0, // ALUSrc
             1'b0, // Branch
             1'b0, // Jump
-        
+            1'b0, // Jalr
             2'b10, // ALUOp
             3'b000 // I_Type (default)
         );
@@ -110,6 +113,7 @@ module control_unit_tb;
             1'b0,
             1'b0,
             1'b1,
+            1'b0,
             1'b0,
             1'b0,
             2'b10,
@@ -125,7 +129,8 @@ module control_unit_tb;
             1'b1,
             1'b1,
             1'b0,
-            1'b0,        
+            1'b0,  
+            1'b0,
             2'b00,
             3'b000
         );
@@ -138,6 +143,7 @@ module control_unit_tb;
             1'b1,
             1'b0,
             1'b1,
+            1'b0,
             1'b0,
             1'b0,
             2'b00,
@@ -154,6 +160,7 @@ module control_unit_tb;
             1'b0,
             1'b1,
             1'b0,
+            1'b0,
             2'b01,
             3'b010
         );
@@ -168,6 +175,7 @@ module control_unit_tb;
             1'b0,
             1'b0,
             1'b1,
+            1'b0,
             2'b00,
             3'b100
         );
@@ -180,6 +188,7 @@ module control_unit_tb;
             1'b0,
             1'b0,
             1'b1,
+            1'b0,
             1'b0,
             1'b0,
             2'b00,
@@ -196,6 +205,7 @@ module control_unit_tb;
             1'b1,
             1'b0,
             1'b0,
+            1'b0,
             2'b00,
             3'b011
         );
@@ -208,6 +218,7 @@ module control_unit_tb;
             1'b0,
             1'b0,
             1'b1,
+            1'b0,
             1'b0,
             1'b1,
             2'b00,
@@ -223,7 +234,8 @@ module control_unit_tb;
             1'b0,
             1'b0,
             1'b0,
-            1'b0,        
+            1'b0,  
+            1'b0,
             2'b00,
             3'b000
         );
