@@ -26,8 +26,12 @@ module rv32i_top(
     wire [31:0] write_back_data;
     
     //control signals
-    wire RegWrite,MemRead,MemWrite,MemToReg,ALUSrc,Branch,Jump;
+    wire RegWrite,MemRead,MemWrite,MemToReg,ALUSrc,Branch,Jump,Jalr;
     wire [4:0] rs1_addr,rs2_addr,rd_addr;
+    
+    //branch signals
+    wire brh_taken,jump_taken;
+    wire [31:0] link_addr;
     
     //___Integration of submodules___
     //PC instantiation
@@ -42,7 +46,7 @@ module rv32i_top(
 
     //control unit instantiation
     control_unit control_unit_block(.opcode(opcode),.funct3(funct3),.funct7(funct7),.RegWrite(RegWrite),.MemRead(MemRead)
-                        ,.MemWrite(MemWrite),.MemToReg(MemToReg),.ALUSrc(ALUSrc),.Branch(Branch),.Jump(Jump),.ALUOp(ALUOp),.imm_sel(imm_sel));
+                        ,.MemWrite(MemWrite),.MemToReg(MemToReg),.ALUSrc(ALUSrc),.Branch(Branch),.Jump(Jump),.Jalr(Jalr),.ALUOp(ALUOp),.imm_sel(imm_sel));
 
     //Immediate generator instantion
     imm_generator imm_gen_block(.instruction(instruction),.imm_sel(imm_sel),.immediate(immediate));
@@ -64,8 +68,13 @@ module rv32i_top(
     data_memory dmem_block(.clk(clk),.memread(MemRead),.memwrite(MemWrite),.address(alu_result),.write_data(rs2_data),.read_data(mem_read_data));
     
     //writeback logic
-    assign write_back_data = (MemToReg) ? mem_read_data : alu_result;
+    assign write_back_data = (Jump || Jalr) ? link_addr : (MemToReg) ? mem_read_data : alu_result;
     
     //without branch logics
-    assign next_pc = pc + 4;
+    //assign next_pc = pc + 4;
+    
+    //Branch/Jump unit
+    Branch_Jump_Unit branch_block(.clk(clk),.rst(rst),.jump(Jump),.jalr(Jalr),.brh(Branch),.func_b(funct3),.src_reg_1(rs1_data),.src_reg_2(rs2_data)
+                                    ,.imm(immediate),.pc_in(pc),.pc_out(next_pc),.link_addr(link_addr),.brh_taken(brh_taken),.jump_taken(jump_taken));
+    
 endmodule
