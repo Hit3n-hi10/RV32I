@@ -3,8 +3,8 @@ module control_unit(
         input [2:0]funct3,
         input [6:0]funct7,
         output reg RegWrite, MemRead, MemWrite,
-        MemToReg, ALUSrc, Branch, Jump, Jalr,
-        output reg [1:0]ALUOp, 
+        MemToReg, ALUSrc,Branch, Jump, Jalr,
+        output reg [1:0]ALUOp,ALUSrcA, 
         output reg [2:0] imm_sel
     );
     
@@ -25,6 +25,7 @@ module control_unit(
     Jump = 0;
     Jalr = 0;
     ALUOp = 2'b00; 
+    ALUSrcA = 2'b00;
     imm_sel = I_Type;
    
         case (opcode)
@@ -80,6 +81,7 @@ module control_unit(
             7'b0110111: begin
                 RegWrite = 1;
                 ALUSrc = 1;
+                ALUSrcA = 2'b10;
                 ALUOp = 2'b00;
                 imm_sel = U_Type;
             end
@@ -88,6 +90,7 @@ module control_unit(
             7'b0010111: begin
                 RegWrite = 1;
                 ALUSrc = 1;
+                ALUSrcA = 2'b01;
                 ALUOp = 2'b00;
                 imm_sel = U_Type;
             end
@@ -112,6 +115,7 @@ module control_unit(
                 Jump = 0;
                 Jalr = 0;
                 ALUOp = 2'b00;
+                ALUSrcA = 2'b00;
                 imm_sel = I_Type;
             end
         endcase 
