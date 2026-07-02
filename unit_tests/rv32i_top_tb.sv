@@ -12,18 +12,15 @@ initial begin
 end
 
 task reset();
-
 begin 
     rst = 1;
     repeat(5) @(posedge clk);
     rst = 0;
     $display("reset released");
 end
-
 endtask
 
 task load_program();
-
 begin 
  // addi x1,x0,5
 core_block.imem_block.mem[0]  = 32'h00500093;
@@ -58,7 +55,6 @@ core_block.imem_block.mem[9]  = 32'h06300393;
 // addi x7,x0,7
 core_block.imem_block.mem[10] = 32'h00700393;
 end
-
 endtask
 
 always@(posedge clk) begin
@@ -71,7 +67,6 @@ end
 
 
 task automatic check_results();
-
 begin
 
 if(core_block.regfile_block.registers[1]==5)
@@ -124,7 +119,6 @@ else
     $display("FAIL : Memory");
 
 end
-
 endtask
 
 //main block
