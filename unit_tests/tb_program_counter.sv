@@ -41,12 +41,12 @@ module tb_program_counter;
 
  @(posedge clk);
     next_pc = 32'h0000_000C;
-    //Mid cycle Reset override interrupt
+    //Case 3:Mid cycle Reset override interrupt
  #3;              
   rst_n = 1'b0;        
    #2;
   rst_n = 1'b1;
-    //Branch /Long jump target updates
+    //Case 4:Branch Long jump target updates
  @(posedge clk);
     next_pc = 32'hAFFF_0000;
  @(posedge clk);
