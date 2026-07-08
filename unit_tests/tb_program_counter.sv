@@ -27,12 +27,12 @@ module tb_program_counter;
     next_pc = 32'h0000_0000;
 
     $monitor("Time = %0dt | rst_n = %b | next_pc = %h | pc = %h", $time, rst_n, next_pc, pc);
-
+//CASE 1:Asynchronous active low reset
   #2;
   rst_n = 1'b0;        
   #10;
   rst_n = 1'b1;        
-
+    //CASE 2:Sequential Increments (PC+4)
  @(posedge clk);
    next_pc = 32'h0000_0004;
 
@@ -41,10 +41,12 @@ module tb_program_counter;
 
  @(posedge clk);
     next_pc = 32'h0000_000C;
+    //Mid cycle Reset override interrupt
  #3;              
   rst_n = 1'b0;        
    #2;
-  rst_n = 1'b1;        
+  rst_n = 1'b1;
+    //Branch /Long jump target updates
  @(posedge clk);
     next_pc = 32'hAFFF_0000;
  @(posedge clk);
