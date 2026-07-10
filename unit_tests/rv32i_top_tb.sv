@@ -92,6 +92,9 @@ core_block.imem_block.mem[21] = 32'h06300713;
 // addi x14,x0,14 (0x58)
 core_block.imem_block.mem[22] = 32'h00E00713;
 
+for (int i = 23; i < 256; i = i + 1)
+    core_block.imem_block.mem[i] = 32'h00000013; // nop
+
 end
 endtask
 
