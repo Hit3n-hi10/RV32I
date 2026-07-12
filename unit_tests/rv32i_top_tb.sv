@@ -185,11 +185,99 @@ else
 end
 endtask
 
+// Bootflow check
+    
+task automatic boot_check();
+
+begin
+
+    $display("\n==================================");
+    $display("BOOT FLOW VERIFICATION");
+    $display("====================================");
+
+    // Immediately after reset release
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : Reset Vector");
+    else
+        $display("FAIL : Reset Vector");
+
+
+    // Cycle 1
+    @(posedge clk);
+
+    $display("\nCycle 1");
+
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : PC = 0");
+    else
+        $display("FAIL : PC");
+
+    if(core_block.instruction == 32'h00500093)
+        $display("PASS : First Instruction Fetch");
+    else
+        $display("FAIL : First Instruction");
+
+    // Cycle 2
+
+    @(posedge clk);
+
+    $display("\nCycle 2");
+
+    if(core_block.pc == 32'h00000004)
+        $display("PASS : PC = 4");
+    else
+        $display("FAIL : PC");
+
+    if(core_block.regfile_block.registers[1] == 32'd5)
+        $display("PASS : x1 = 5");
+    else
+        $display("FAIL : x1");
+
+    // Cycle 3
+
+    @(posedge clk);
+
+    $display("\nCycle 3");
+
+    if(core_block.pc == 32'h00000008)
+        $display("PASS : PC = 8");
+    else
+        $display("FAIL : PC");
+
+    if(core_block.regfile_block.registers[2] == 32'd10)
+        $display("PASS : x2 = 10");
+    else
+        $display("FAIL : x2");
+
+
+    // Cycle 4
+
+    @(posedge clk);
+
+    $display("\nCycle 4");
+
+    if(core_block.pc == 32'h0000000C)
+        $display("PASS : PC = C");
+    else
+        $display("FAIL : PC");
+
+    if(core_block.regfile_block.registers[3] == 32'd15)
+        $display("PASS : x3 = 15");
+    else
+        $display("FAIL : x3");
+
+    $display("\nBOOT FLOW VERIFICATION COMPLETED\n");
+
+end
+
+endtask
+
 //main block
 initial begin
 
 load_program();
 reset();
+boot_ckeck();
 
 repeat(40)
 @(posedge clk);
