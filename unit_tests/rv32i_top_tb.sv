@@ -11,13 +11,42 @@ initial begin
     forever #5 clk = ~clk;
 end
 
-task reset();
-begin 
-    rst = 1;
-    repeat(5) @(posedge clk);
-    rst = 0;
-    $display("reset released");
-end
+// Clock check 
+task automatic check_clock();
+    real t0, t1;
+    begin
+        $display("CLOCK CHECK");
+        @(posedge clk); t0 = $realtime;
+        @(posedge clk); t1 = $realtime;
+        if ((t1 - t0) == 10.0)
+            $display("PASS : Clock Period (%0f ns)", t1-t0);
+        else
+            $display("FAIL : Clock Period (got %0f ns, expected 10ns)", t1-t0);
+    end
+endtask
+
+// Reset check
+task automatic check_reset();
+    begin
+        $display("RESET CHECK");
+        rst = 1;
+        @(posedge clk);
+        if (core_block.pc == 32'h0)
+            $display("PASS : Reset PC");
+        else
+            $display("FAIL : Reset PC (got %h)", core_block.pc);
+
+        if (core_block.regfile_block.registers[1] == 0 &&
+            core_block.regfile_block.registers[5] == 0 &&
+            core_block.regfile_block.registers[13] == 0)
+            $display("PASS : Reset Register File");
+        else
+            $display("FAIL : Reset Register File");
+
+        repeat(3) @(posedge clk);
+        rst = 0;
+        $display("reset released");
+    end
 endtask
 
 task load_program();
@@ -263,6 +292,7 @@ begin
 end
 
 endtask
+    
 // Bootflow check
     
 task automatic boot_check();
@@ -354,9 +384,11 @@ endtask
 initial begin
 
 load_program();
-reset();
+check_clock();
+check_reset();
+boot_check();
+check_reset();    // re-sync PC back to 0 before connectivity_check
 connectivity_check();
-boot_ckeck();
 
 repeat(40)
 @(posedge clk);
