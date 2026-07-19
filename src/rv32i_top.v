@@ -10,6 +10,7 @@ module rv32i_top(
     wire [6:0] opcode;           // for decoder
     wire [2:0] funct3;
     wire [6:0] funct7;
+    wire illegal_instr;
     
     wire [31:0] immediate;       // for immediate generator
     wire [2:0] imm_sel;
@@ -44,7 +45,7 @@ module rv32i_top(
     
     //Decoder instantiation
     instruction_decoder decoder_block(.instruction(instruction),.opcode(opcode),.rs1(rs1_addr)
-                                 ,.rs2(rs2_addr),.rd(rd_addr),.funct3(funct3),.funct7(funct7));
+                                      ,.rs2(rs2_addr),.rd(rd_addr),.funct3(funct3),.funct7(funct7),.illegal_instr(illegal_instr));
 
     //control unit instantiation
     control_unit control_unit_block(.opcode(opcode),.funct3(funct3),.funct7(funct7),.RegWrite(RegWrite),.MemRead(MemRead)
