@@ -380,6 +380,167 @@ end
 
 endtask
 
+// ---------------------------------------------------------------
+// Low-Power Wake Boot Check
+// No dedicated power-gating/sleep signal exists - extended reset hold simulates wake-from-idle.
+// ---------------------------------------------------------------
+task automatic boot_check_lowpower_wake();
+
+begin
+
+    $display("\n==================================");
+    $display("BOOT FLOW VERIFICATION (WAKE FROM LOW POWER)");
+    $display("====================================");
+
+    // Simulate extended idle/sleep by holding reset far longer
+    // than the normal check_reset() hold (3 cycles).
+    rst = 1;
+    repeat(50) @(posedge clk);
+    rst = 0;
+
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : Reset Vector (wake)");
+    else
+        $display("FAIL : Reset Vector (wake)");
+
+    // Cycle 1
+    @(posedge clk);
+    $display("\nCycle 1 (wake)");
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : PC = 0 (wake)");
+    else
+        $display("FAIL : PC (wake)");
+    if(core_block.instruction == 32'h00500093)
+        $display("PASS : First Instruction Fetch (wake)");
+    else
+        $display("FAIL : First Instruction (wake)");
+
+    // Cycle 2
+    @(posedge clk);
+    $display("\nCycle 2 (wake)");
+    if(core_block.pc == 32'h00000004)
+        $display("PASS : PC = 4 (wake)");
+    else
+        $display("FAIL : PC (wake)");
+    if(core_block.regfile_block.registers[1] == 32'd5)
+        $display("PASS : x1 = 5 (wake)");
+    else
+        $display("FAIL : x1 (wake)");
+
+    // Cycle 3
+    @(posedge clk);
+    $display("\nCycle 3 (wake)");
+    if(core_block.pc == 32'h00000008)
+        $display("PASS : PC = 8 (wake)");
+    else
+        $display("FAIL : PC (wake)");
+    if(core_block.regfile_block.registers[2] == 32'd10)
+        $display("PASS : x2 = 10 (wake)");
+    else
+        $display("FAIL : x2 (wake)");
+
+    // Cycle 4
+    @(posedge clk);
+    $display("\nCycle 4 (wake)");
+    if(core_block.pc == 32'h0000000C)
+        $display("PASS : PC = C (wake)");
+    else
+        $display("FAIL : PC (wake)");
+    if(core_block.regfile_block.registers[3] == 32'd15)
+        $display("PASS : x3 = 15 (wake)");
+    else
+        $display("FAIL : x3 (wake)");
+
+    $display("\nBOOT FLOW VERIFICATION (WAKE FROM LOW POWER) COMPLETED\n");
+
+end
+
+endtask
+
+// ---------------------------------------------------------------
+// Debug Mode Boot Check
+// No dedicated debug module exists - repeated reset pulses simulate debugger halt/resume.
+// ---------------------------------------------------------------
+task automatic boot_check_debug_mode();
+
+begin
+
+    $display("\n==================================");
+    $display("BOOT FLOW VERIFICATION (DEBUG MODE - REPEATED HALT/RESUME)");
+    $display("====================================");
+
+    // Simulate 3 debugger halt/resume pulses before final release
+    repeat (3) begin
+        rst = 1;
+        repeat(5) @(posedge clk);
+        rst = 0;
+        repeat(2) @(posedge clk);   // brief "resume" window, like a single-step
+    end
+
+    // Final release for real boot
+    rst = 1;
+    repeat(5) @(posedge clk);
+    rst = 0;
+
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : Reset Vector (debug)");
+    else
+        $display("FAIL : Reset Vector (debug)");
+
+    // Cycle 1
+    @(posedge clk);
+    $display("\nCycle 1 (debug)");
+    if(core_block.pc == 32'h00000000)
+        $display("PASS : PC = 0 (debug)");
+    else
+        $display("FAIL : PC (debug)");
+    if(core_block.instruction == 32'h00500093)
+        $display("PASS : First Instruction Fetch (debug)");
+    else
+        $display("FAIL : First Instruction (debug)");
+
+    // Cycle 2
+    @(posedge clk);
+    $display("\nCycle 2 (debug)");
+    if(core_block.pc == 32'h00000004)
+        $display("PASS : PC = 4 (debug)");
+    else
+        $display("FAIL : PC (debug)");
+    if(core_block.regfile_block.registers[1] == 32'd5)
+        $display("PASS : x1 = 5 (debug)");
+    else
+        $display("FAIL : x1 (debug)");
+
+    // Cycle 3
+    @(posedge clk);
+    $display("\nCycle 3 (debug)");
+    if(core_block.pc == 32'h00000008)
+        $display("PASS : PC = 8 (debug)");
+    else
+        $display("FAIL : PC (debug)");
+    if(core_block.regfile_block.registers[2] == 32'd10)
+        $display("PASS : x2 = 10 (debug)");
+    else
+        $display("FAIL : x2 (debug)");
+
+    // Cycle 4
+    @(posedge clk);
+    $display("\nCycle 4 (debug)");
+    if(core_block.pc == 32'h0000000C)
+        $display("PASS : PC = C (debug)");
+    else
+        $display("FAIL : PC (debug)");
+    if(core_block.regfile_block.registers[3] == 32'd15)
+        $display("PASS : x3 = 15 (debug)");
+    else
+        $display("FAIL : x3 (debug)");
+
+    $display("\nBOOT FLOW VERIFICATION (DEBUG MODE) COMPLETED\n");
+
+end
+
+endtask
+    
 //main block
 initial begin
 
@@ -387,6 +548,10 @@ load_program();
 check_clock();
 check_reset();
 boot_check();
+check_reset();
+boot_check_lowpower_wake();
+check_reset();
+boot_check_debug_mode();
 check_reset();    // re-sync PC back to 0 before connectivity_check
 connectivity_check();
 
