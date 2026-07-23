@@ -23,7 +23,7 @@ class rv32i_env extends uvm_env;
   //connect phase
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    `uvm_info("env class","connect_phase",UVM_MEDIUM);
+    `uvm_info("env class","connect_phase",UVM_MEDIUM)
     agent.mon.item_collected_port.connect(scb.item_collected_export);
     
   endfunction
