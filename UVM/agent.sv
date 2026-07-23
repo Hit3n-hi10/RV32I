@@ -26,7 +26,7 @@ class rv32i_agent extends uvm_agent;
   //connect phase
   function void connect_phase(uvm_phase phase);
     super.connect_phase(phase);
-    `uvm_info("agent class","connect phase",UVM_MEDIUM);
+    `uvm_info("agent class","connect phase",UVM_MEDIUM)
     drv.seq_item_port.connect(sqr.seq_item_export);
     
   endfunction
