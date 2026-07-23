@@ -227,7 +227,7 @@ module control_unit_tb;
             3'b011
         );
 
-     -
+     
         // AUIPC
        
         check_control(
@@ -239,7 +239,7 @@ module control_unit_tb;
             3'b011
         );
 
-        -
+        
         // JALR
         
         check_control(
