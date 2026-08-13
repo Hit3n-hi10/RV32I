@@ -540,6 +540,194 @@ begin
 end
 
 endtask
+  // =====================================================
+// CONSTRAINT-RANDOM TRANSACTION
+// =====================================================
+
+class addi_transaction;
+
+    rand bit [4:0] rd;
+    rand bit [4:0] rs1;
+    rand bit signed [11:0] imm;
+
+    // Always use x0 as source register
+    constraint valid_rs1 {
+        rs1 == 5'd0;
+    }
+
+    // x0 cannot be destination
+    constraint valid_rd {
+        rd inside {[1:31]};
+    }
+
+    // Valid 12-bit signed immediate
+    constraint valid_imm {
+        imm inside {[-2048:2047]};
+    }
+
+endclass
+// =====================================================
+// ADDI INSTRUCTION ENCODER
+// =====================================================
+
+function automatic [31:0] encode_addi(
+    input [4:0] rd,
+    input [4:0] rs1,
+    input signed [11:0] imm
+);
+
+    encode_addi = {
+        imm[11:0],
+        rs1,
+        3'b000,
+        rd,
+        7'b0010011
+    };
+
+endfunction
+// =====================================================
+// CONSTRAINT-RANDOM ADDI TEST
+// =====================================================
+
+task automatic constraint_random_addi_test();
+
+    addi_transaction tr;
+
+    logic signed [31:0] expected;
+    logic signed [31:0] actual;
+
+    $display("\n======================================");
+    $display("CONSTRAINT RANDOM ADDI TEST");
+    $display("======================================");
+
+    tr = new();
+
+    // Run 100 independent randomized tests
+    for (int i = 0; i < 100; i++) begin
+
+        // --------------------------------------
+        // Randomize transaction
+        // --------------------------------------
+
+        if (!tr.randomize()) begin
+
+            $display(
+                "FAIL : Randomization failed at test %0d",
+                i
+            );
+
+            continue;
+
+        end
+
+
+        // --------------------------------------
+        // Generate ADDI instruction
+        // --------------------------------------
+
+        core_block.imem_block.mem[0] =
+            encode_addi(
+                tr.rd,
+                tr.rs1,
+                tr.imm
+            );
+
+
+        // --------------------------------------
+        // Expected result
+        // Since rs1 = x0:
+        //
+        // x0 + immediate = immediate
+        // --------------------------------------
+
+        expected = $signed(tr.imm);
+
+
+        $display(
+            "\nTest %0d",
+            i
+        );
+
+        $display(
+            "Generated : ADDI x%0d, x%0d, %0d",
+            tr.rd,
+            tr.rs1,
+            tr.imm
+        );
+
+        $display(
+            "Instruction : %h",
+            core_block.imem_block.mem[0]
+        );
+
+        $display(
+            "Expected : %0d",
+            expected
+        );
+
+
+        // --------------------------------------
+        // Reset processor
+        // This puts PC back to 0
+        // --------------------------------------
+
+        rst = 1;
+
+        repeat(5)
+            @(posedge clk);
+
+        rst = 0;
+
+        // Allow reset release to settle
+        @(posedge clk);
+
+
+        // --------------------------------------
+        // Execute ADDI at address 0
+        // --------------------------------------
+
+        @(posedge clk);
+
+
+        // --------------------------------------
+        // Read actual result
+        // --------------------------------------
+
+        actual =
+            $signed(core_block.regfile_block.registers[tr.rd]);
+
+
+        // --------------------------------------
+        // Compare expected vs actual
+        // --------------------------------------
+
+        if (actual == expected) begin
+
+            $display(
+                "PASS : x%0d = %0d",
+                tr.rd,
+                actual
+            );
+
+        end
+        else begin
+
+            $display(
+                "FAIL : x%0d | Expected = %0d | Actual = %0d",
+                tr.rd,
+                expected,
+                actual
+            );
+
+        end
+
+    end
+
+    $display("\n======================================");
+    $display("CONSTRAINT RANDOM ADDI TEST COMPLETED");
+    $display("======================================\n");
+
+endtask
     
 //main block
 initial begin
@@ -555,10 +743,13 @@ boot_check_debug_mode();
 check_reset();    // re-sync PC back to 0 before connectivity_check
 connectivity_check();
 
+
+
 repeat(40)
 @(posedge clk);
 
-check_results();
+check_results(); 
+constraint_random_addi_test();
 $finish;
 
 end
