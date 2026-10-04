@@ -7,9 +7,9 @@ module control_unit(
         output reg [1:0]ALUOp,ALUSrcA, 
         output reg [2:0] imm_sel
     );
-    // ALUSrcA = 2'b00;  // normal rs1
-    // ALUSrcA = 2'b01;  // PC
-    // ALUSrcA = 2'b10;  // 0
+        // ALUSrcA = 2'b00;  // normal rs1        ALUOP = 2'b00 (ADD TYPE OP)
+        // ALUSrcA = 2'b01;  // PC                ALUOP = 2'b01 (BRANCH)
+        // ALUSrcA = 2'b10;  // 0                 ALUOP = 2'b10 (R/I TYPE)
         
     // Immediate Type Encoding
     parameter I_Type = 3'b000;
