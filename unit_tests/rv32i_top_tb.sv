@@ -127,7 +127,9 @@ for (int i = 23; i < 256; i = i + 1)
 end
 endtask
 
-always@(posedge clk) begin
+bit verbose = 1;
+
+always @(posedge clk) if (verbose) begin
     $display("Time : %0t",$time);
     $display("Pc : %h",core_block.pc);
     $display("Next Pc : %h",core_block.next_pc);
@@ -215,82 +217,139 @@ end
 endtask
     
 //connectivity check
-   task automatic connectivity_check();
+ int conn_pass = 0;
+int conn_fail = 0;
 
+task automatic chk(input bit cond, input string name);
+    if (cond) begin
+        $display("PASS : %s", name);
+        conn_pass++;
+    end
+    else begin
+        $display("FAIL : %s", name);
+        conn_fail++;
+    end
+endtask
+
+task automatic connectivity_check();
 begin
+
+    conn_pass = 0;
+    conn_fail = 0;
 
     $display("MODULE CONNECTIVITY CHECK");
 
-    @(posedge clk);
+    // ---------------------------------------------------------
+    // Deterministic start: reset, release 1 ns after a clock edge,
+    // then let combinational logic settle. PC is still 0 here.
+    // ---------------------------------------------------------
+    rst = 1;
+    repeat (3) @(posedge clk);
+    #1;
+    rst = 0;
+    #1;
 
-    // Instruction Memory
-    if(core_block.instruction == 32'h00500093)
-        $display("PASS : Instruction Memory");
-    else
-        $display("FAIL : Instruction Memory");
+    // =========================================================
+    // INSTRUCTION 0 : addi x1,x0,5   (0x00500093), PC = 0
+    // =========================================================
+    $display("-- Instruction 0: addi x1,x0,5 --");
+
+    // Program counter
+    chk(core_block.pc === 32'h0,                  "PC = 0 after reset release");
+
+    // Instruction memory
+    chk(core_block.instruction === 32'h00500093,  "Instruction Memory");
 
     // Decoder
-    if(core_block.opcode == 7'b0010011 &&
-       core_block.rs1_addr == 5'd0 &&
-       core_block.rd_addr  == 5'd1)
-        $display("PASS : Decoder");
-    else
-        $display("FAIL : Decoder");
+    chk(core_block.opcode   === 7'b0010011,       "Decoder: opcode");
+    chk(core_block.rs1_addr === 5'd0,             "Decoder: rs1");
+    // I-type has no rs2 field: a decoder may pass instruction[24:20] (= 5)
+    // through or mask it to 0. Either is correct, X/Z is not.
+    chk((core_block.rs2_addr === 5'd0) || (core_block.rs2_addr === 5'd5),
+                                                  "Decoder: rs2 (0 or 5 for I-type)");
+    chk(core_block.rd_addr  === 5'd1,             "Decoder: rd");
+    chk(core_block.funct3   === 3'b000,           "Decoder: funct3");
+    chk(core_block.funct7   === 7'b0000000,       "Decoder: funct7");
+    chk(core_block.illegal_instr === 1'b0,        "Decoder: illegal_instr low");
 
-    // Control Unit
-    if(core_block.RegWrite  == 1'b1 &&
-       core_block.ALUSrc    == 1'b1 &&
-       core_block.MemRead   == 1'b0 &&
-       core_block.MemWrite  == 1'b0 &&
-       core_block.Branch    == 1'b0 &&
-       core_block.Jump      == 1'b0 &&
-       core_block.ALUOp     == 2'b10)
-        $display("PASS : Control Unit");
-    else
-        $display("FAIL : Control Unit");
+    // Control unit
+    chk(core_block.RegWrite === 1'b1,             "Control: RegWrite");
+    chk(core_block.ALUSrc   === 1'b1,             "Control: ALUSrc (immediate)");
+    chk(core_block.ALUSrcA  === 2'b00,            "Control: ALUSrcA (rs1)");
+    chk(core_block.MemRead  === 1'b0,             "Control: MemRead");
+    chk(core_block.MemWrite === 1'b0,             "Control: MemWrite");
+    chk(core_block.MemToReg === 1'b0,             "Control: MemToReg");
+    chk(core_block.Branch   === 1'b0,             "Control: Branch");
+    chk(core_block.Jump     === 1'b0,             "Control: Jump");
+    chk(core_block.Jalr     === 1'b0,             "Control: Jalr");
+    chk(core_block.ALUOp    === 2'b10,            "Control: ALUOp");
 
-    // Immediate Generator
-    if(core_block.immediate == 32'd5)
-        $display("PASS : Immediate Generator");
-    else
-        $display("FAIL : Immediate Generator");
+    // Immediate generator
+    chk(core_block.immediate === 32'd5,           "Immediate Generator");
 
-    // ALU Control
-    if(core_block.alu_op == 4'b0000)
-        $display("PASS : ALU Control");
-    else
-        $display("FAIL : ALU Control");
+    // ALU control
+    chk(core_block.alu_op === 4'b0000,            "ALU Control");
 
-    // Register File Read
-    if(core_block.rs1_data == 32'd0)
-        $display("PASS : Register File Read");
-    else
-        $display("FAIL : Register File Read");
-
-    // ALU Input
-    if(core_block.alu_B == 32'd5)
-        $display("PASS : ALU Input");
-    else
-        $display("FAIL : ALU Input");
+    // Register file read, ALU inputs
+    chk(core_block.rs1_data === 32'd0,            "Register File Read (rs1)");
+    chk(core_block.alu_A    === 32'd0,            "ALU input A");
+    chk(core_block.alu_B    === 32'd5,            "ALU input B (immediate mux)");
 
     // ALU
-    if(core_block.alu_result == 32'd5)
-        $display("PASS : ALU");
+    chk(core_block.alu_result === 32'd5,          "ALU result");
+    chk(core_block.alu_zero   === 1'b0,           "ALU zero flag");
+
+    // Write-back mux and branch/jump unit
+    chk(core_block.write_back_data === 32'd5,     "Write-back mux");
+    chk(core_block.next_pc    === 32'd4,          "Branch/Jump unit: next PC = PC+4");
+    chk(core_block.brh_taken  === 1'b0,           "Branch/Jump unit: brh_taken low");
+    chk(core_block.jump_taken === 1'b0,           "Branch/Jump unit: jump_taken low");
+
+    // Execute instruction 0, then check state 1 ns after the edge
+    @(posedge clk); #1;
+    chk(core_block.pc === 32'h4,                                    "PC updated to 4");
+    chk(core_block.regfile_block.registers[1] === 32'd5,            "Register File Writeback (x1 = 5)");
+
+    // Execute instruction 1 (addi x2,x0,10)
+    @(posedge clk); #1;
+    chk(core_block.pc === 32'h8,                                    "PC updated to 8");
+    chk(core_block.regfile_block.registers[2] === 32'd10,           "Register File Writeback (x2 = 10)");
+
+    // =========================================================
+    // INSTRUCTION 2 : add x3,x1,x2   (0x002081B3), PC = 8
+    // Exercises the rs2 read path and the register-operand ALU path
+    // =========================================================
+    $display("-- Instruction 2: add x3,x1,x2 --");
+
+    chk(core_block.instruction === 32'h002081B3,  "Instruction Memory (add)");
+    chk(core_block.opcode   === 7'b0110011,       "Decoder: R-type opcode");
+    chk(core_block.rs1_addr === 5'd1,             "Decoder: rs1 = x1");
+    chk(core_block.rs2_addr === 5'd2,             "Decoder: rs2 = x2");
+    chk(core_block.rd_addr  === 5'd3,             "Decoder: rd = x3");
+    chk(core_block.RegWrite === 1'b1,             "Control: RegWrite");
+    chk(core_block.ALUSrc   === 1'b0,             "Control: ALUSrc (register)");
+    chk(core_block.rs1_data === 32'd5,            "Register File Read (rs1 = 5)");
+    chk(core_block.rs2_data === 32'd10,           "Register File Read (rs2 = 10)");
+    chk(core_block.alu_B    === 32'd10,           "ALU input B (rs2 mux)");
+    chk(core_block.alu_op   === 4'b0000,          "ALU Control (ADD)");
+    chk(core_block.alu_result === 32'd15,         "ALU result (15)");
+    chk(core_block.write_back_data === 32'd15,    "Write-back mux (15)");
+
+    @(posedge clk); #1;
+    chk(core_block.regfile_block.registers[3] === 32'd15,           "Register File Writeback (x3 = 15)");
+    chk(core_block.pc === 32'hC,                                    "PC updated to C");
+
+    // ---------------------------------------------------------
+    // Summary: only claims success if nothing failed
+    // ---------------------------------------------------------
+    if (conn_fail == 0)
+        $display("MODULE CONNECTIVITY VERIFIED (%0d/%0d checks passed)",
+                 conn_pass, conn_pass + conn_fail);
     else
-        $display("FAIL : ALU");
-
-    @(posedge clk);
-
-    // Register File Writeback
-    if(core_block.regfile_block.registers[1] == 32'd5)
-        $display("PASS : Register File Writeback");
-    else
-        $display("FAIL : Register File Writeback");
-
-    $display("MODULE CONNECTIVITY VERIFIED");
+        $display("MODULE CONNECTIVITY FAILED (%0d failed, %0d passed)",
+                 conn_fail, conn_pass);
 
 end
-
 endtask
     
 // Bootflow check
@@ -540,144 +599,7 @@ begin
 end
 
 endtask
-class rv32i_transaction;
 
-    // =========================================================
-    // Randomized fields
-    // =========================================================
-
-    rand int unsigned instr_type;
-
-    rand logic [4:0] rs1;
-    rand logic [4:0] rs2;
-    rand logic [4:0] rd;
-
-    rand logic signed [11:0] imm;
-    rand logic [19:0] u_imm;
-
-
-    // =========================================================
-    // Instruction type
-    //
-    // 0-9   : R-type
-    // 10-18 : I-type ALU
-    // 19-23 : Loads
-    // 24-26 : Stores
-    // 27-32 : Branches
-    // 33    : JAL
-    // 34    : JALR
-    // 35    : LUI
-    // 36    : AUIPC
-    // =========================================================
-
-    constraint valid_instr_type {
-        instr_type inside {[0:36]};
-    }
-
-
-    // =========================================================
-    // Register constraints
-    // =========================================================
-
-    constraint valid_registers {
-
-        rs1 inside {[0:31]};
-        rs2 inside {[0:31]};
-
-        // rd = 1 to 31
-        // This avoids writing to x0.
-        rd inside {[1:31]};
-    }
-
-
-    // =========================================================
-    // Immediate constraints
-    // =========================================================
-
-    constraint valid_immediate {
-
-        // -----------------------------------------
-        // I-type ALU instructions
-        // ADDI, SLTI, SLTIU, XORI, ORI, ANDI
-        // -----------------------------------------
-        if (instr_type inside {[10:15]})
-            imm inside {[-2048:2047]};
-
-
-        // -----------------------------------------
-        // Shift immediate instructions
-        // SLLI, SRLI, SRAI
-        //
-        // RV32I shift amount = 5 bits
-        // -----------------------------------------
-        else if (instr_type inside {[16:18]})
-            imm inside {[0:31]};
-
-
-        // -----------------------------------------
-        // Loads
-        // LB, LH, LW, LBU, LHU
-        // -----------------------------------------
-        else if (instr_type inside {[19:23]})
-            imm inside {[-128:128]};
-
-
-        // -----------------------------------------
-        // Stores
-        // SB, SH, SW
-        // -----------------------------------------
-        else if (instr_type inside {[24:26]})
-            imm inside {[-128:128]};
-
-
-        // -----------------------------------------
-        // Branches
-        // BEQ, BNE, BLT, BGE, BLTU, BGEU
-        //
-        // Branch offset must be aligned to 2 bytes.
-        // -----------------------------------------
-        else if (instr_type inside {[27:32]})
-            imm inside {[-128:-2], [2:128]};
-
-
-        // -----------------------------------------
-        // JAL
-        //
-        // JAL immediate is 21-bit signed,
-        // but we keep the random range small
-        // for your current instruction-memory setup.
-        // -----------------------------------------
-        else if (instr_type == 33)
-            imm inside {[-128:-2], [2:128]};
-
-
-        // -----------------------------------------
-        // JALR
-        //
-        // Immediate is a signed 12-bit value.
-        // -----------------------------------------
-        else if (instr_type == 34)
-            imm inside {[-128:128]};
-
-
-        // -----------------------------------------
-        // LUI / AUIPC
-        // -----------------------------------------
-        else
-            imm inside {[-2048:2047]};
-    }
-
-
-    // =========================================================
-    // U-type immediate
-    // =========================================================
-
-    constraint valid_u_immediate {
-        u_imm inside {[0:1048575]};
-    }
-
-
-endclass
 // ============================================================
 // RV32I INSTRUCTION ENCODER
 // ============================================================
@@ -1274,605 +1196,423 @@ function automatic [31:0] expected_alu_result(
     end
 
 endfunction
+
+class rv32i_transaction;
+
+    // ---------------- randomized fields ----------------
+    rand int unsigned        instr_type;
+    rand logic [4:0]         rs1, rs2, rd;
+    rand logic signed [11:0] imm;
+    rand logic [19:0]        u_imm;
+    rand logic [31:0]        rs1_val, rs2_val;
+    rand bit                 force_equal;
+
+    // ---------------- coverage sample vars ----------------
+    bit taken;
+    bit rs_equal;
+    bit rd_zero;
+
+    // 0-9 R | 10-18 I-ALU | 19-23 loads | 24-26 stores
+    // 27-32 branches | 33 JAL | 34 JALR | 35 LUI | 36 AUIPC
+    constraint c_type { instr_type inside {[0:36]}; }
+
+    // rd = x0 about 5% of the time to test that writes to x0 are ignored
+    constraint c_rd { rd dist {0 := 1, [1:31] :/ 19}; }
+
+    // Loads, stores and JALR use x0 as base so the target address is known
+    constraint c_base {
+        if (instr_type inside {[19:26], 34}) rs1 == 0;
+    }
+
+    constraint c_imm {
+
+    // Normal I-type ALU
+    if (instr_type inside {[10:15]})
+        imm inside {[-2048:2047]};
+
+    // Shift immediate
+    else if (instr_type inside {[16:18]})
+        imm inside {[0:31]};
+
+    // Loads
+    else if (instr_type inside {[19:23]})
+        imm == 0;
+
+    // Stores
+    else if (instr_type inside {[24:26]})
+        imm == 0;
+
+    // Branches
+    else if (instr_type inside {[27:32]})
+        imm inside {[4:252]};
+
+    // JAL
+    else if (instr_type == 33)
+        imm inside {[4:252]};
+
+    // JALR
+    else if (instr_type == 34)
+        imm inside {[0:252]};
+
+    // LUI / AUIPC
+    else
+        imm inside {[-2048:2047]};
+}
+
+    constraint c_u { u_imm inside {[0:1048575]}; }
+
+    // Corner values matter for SLT/SLTU/SRA/SUB
+    constraint c_vals {
+        rs1_val dist {32'h00000000 := 1, 32'hFFFFFFFF := 1,
+                      32'h80000000 := 1, 32'h7FFFFFFF := 1,
+                      [32'h0:32'hFFFFFFFF] :/ 6};
+        rs2_val dist {32'h00000000 := 1, 32'hFFFFFFFF := 1,
+                      32'h80000000 := 1, 32'h7FFFFFFF := 1,
+                      [32'h0:32'hFFFFFFFF] :/ 6};
+
+        // x0 is always zero
+        if (rs1 == 0) rs1_val == 32'h0;
+        if (rs2 == 0) rs2_val == 32'h0;
+
+        // Same register index must hold the same value
+        if (rs1 == rs2) rs1_val == rs2_val;
+
+        // Make BEQ/BGE/BGEU taken often
+        if (force_equal) rs1_val == rs2_val;
+    }
+
+    constraint c_eq { force_equal dist {0 := 1, 1 := 1}; }
+
+            function void post_randomize();
+        int r1, r2;
+
+        // 4-byte alignment for loads, stores, branches, JAL and JALR
+        if (instr_type inside {[19:34]})
+            imm[1:0] = 2'b00;
+
+        // Inject corner values (about 40% of the time each), because XSim
+        // does not honor the dist weights on rs1_val / rs2_val
+        r1 = $urandom_range(0, 9);
+        r2 = $urandom_range(0, 9);
+        case (r1)
+            0: rs1_val = 32'h00000000;
+            1: rs1_val = 32'hFFFFFFFF;
+            2: rs1_val = 32'h80000000;
+            3: rs1_val = 32'h7FFFFFFF;
+            default: ;
+        endcase
+        case (r2)
+            0: rs2_val = 32'h00000000;
+            1: rs2_val = 32'hFFFFFFFF;
+            2: rs2_val = 32'h80000000;
+            3: rs2_val = 32'h7FFFFFFF;
+            default: ;
+        endcase
+
+        // Make operands equal when requested
+        if (force_equal) begin
+            if      (rs1 == 0) rs2_val = 32'h0;
+            else if (rs2 == 0) rs1_val = 32'h0;
+            else               rs2_val = rs1_val;
+        end
+
+        // x0 always reads as zero
+        if (rs1 == 0) rs1_val = 32'h0;
+        if (rs2 == 0) rs2_val = 32'h0;
+
+        // Same register index must hold the same value
+        if (rs1 == rs2) rs2_val = rs1_val;
+
+        rs_equal = (rs1_val == rs2_val);
+        rd_zero  = (rd == 0);
+    endfunction
+
+    // ---------------- functional coverage ----------------
+    covergroup cg;
+        cp_type  : coverpoint instr_type { bins t[] = {[0:36]}; }
+        cp_br    : coverpoint instr_type { bins br[] = {[27:32]}; }
+        cp_taken : coverpoint taken;
+        cp_eq    : coverpoint rs_equal;
+        cp_rd0   : coverpoint rd_zero;
+        cp_rs1   : coverpoint rs1_val {
+            bins zero   = {32'h00000000};
+            bins ones   = {32'hFFFFFFFF};
+            bins minint = {32'h80000000};
+            bins maxint = {32'h7FFFFFFF};
+            bins other  = default;
+        }
+        x_br_taken : cross cp_br, cp_taken;
+        x_br_eq    : cross cp_br, cp_eq;
+    endgroup
+
+    function new();
+        cg = new();
+    endfunction
+
+endclass
+
+
 // ============================================================
-// CORRECTED CONSTRAINT-RANDOM RV32I TEST
+// CONSTRAINT-RANDOM RV32I TEST
+//
+// One check per test covering:
+//   - PC after the instruction
+//   - all 32 registers (rd gets the result, everything else unchanged,
+//     x0 stays 0)
+//   - dmem[0..15] (only the store target changes)
 // ============================================================
 
 task automatic constraint_random_rv32i_test();
 
     rv32i_transaction tr;
 
-    reg [31:0] instruction;
+    logic        [31:0] instruction;
+    logic        [31:0] actual_rs1, actual_rs2;
+    logic        [31:0] expected, expected_pc, new_word;
+    logic signed [31:0] imm32;
 
-    reg [31:0] rs1_value;
-    reg [31:0] rs2_value;
+    logic [31:0] reg_snap [32];
+    logic [31:0] exp_regs [32];
+    logic [31:0] mem_snap [16];
+    logic [31:0] exp_mem  [16];
 
-    // Actual values seen by the DUT
-    reg [31:0] actual_rs1;
-    reg [31:0] actual_rs2;
+    int  widx;
+    bit  taken;
+    bit  writes_rd;
+    bit  test_ok;
+    int  pass_count;
+    int  fail_count;
+    int  fail_by_type [37];
 
-    reg [31:0] expected;
-    reg [31:0] actual;
-
-    reg [31:0] expected_pc;
-    reg [31:0] old_memory;
-
-    integer pass_count;
-    integer fail_count;
-
-    tr = new();
-
+    tr         = new();
     pass_count = 0;
     fail_count = 0;
+        foreach (fail_by_type[i]) fail_by_type[i] = 0;
 
     $display("");
     $display("======================================================");
-    $display("       CONSTRAINT-RANDOM RV32I TEST");
+    $display("       CONSTRAINT-RANDOM RV32I TEST (1000 tests)");
+    $display("       Constraint-random testing started");
     $display("======================================================");
-    $display("       TOTAL TESTS = 1000");
-    $display("======================================================");
-
-
-    // =========================================================
-    // 1000 RANDOMIZED TESTS
-    // =========================================================
 
     for (int test = 0; test < 1000; test++) begin
 
-        // -----------------------------------------------------
-        // RANDOMIZE TRANSACTION
-        // -----------------------------------------------------
-
+        // ---------------------------------------------------
+        // Randomize
+        // ---------------------------------------------------
         if (!tr.randomize()) begin
-
-            $display(
-                "[FAIL] Randomization failed at Test=%0d",
-                test
-            );
-
+            $display("[FAIL] Randomization failed at Test=%0d", test);
             fail_count++;
             continue;
-
         end
 
+        actual_rs1 = tr.rs1_val;
+        actual_rs2 = tr.rs2_val;
+        imm32      = tr.imm;            // proper sign extension to 32 bits
 
-        // -----------------------------------------------------
-        // GENERATE RANDOM SOURCE VALUES
-        // -----------------------------------------------------
+        instruction = encode_rv32i(tr.instr_type, tr.rs1, tr.rs2,
+                                   tr.rd, imm32, tr.u_imm);
 
-        rs1_value = $urandom;
-        rs2_value = $urandom;
-
-
-        // -----------------------------------------------------
-        // IMPORTANT:
-        // x0 MUST ALWAYS BE ZERO
-        // -----------------------------------------------------
-
-        actual_rs1 =
-            (tr.rs1 == 0) ? 32'd0 : rs1_value;
-
-        actual_rs2 =
-            (tr.rs2 == 0) ? 32'd0 : rs2_value;
-
-
-        // -----------------------------------------------------
-        // GENERATE INSTRUCTION
-        // -----------------------------------------------------
-
-        instruction =
-            encode_rv32i(
-                tr.instr_type,
-                tr.rs1,
-                tr.rs2,
-                tr.rd,
-                tr.imm,
-                tr.u_imm
-            );
-
-
-        // =====================================================
-        // RESET FIRST
-        // =====================================================
-
+        // ---------------------------------------------------
+        // Reset, then release and initialize in the SAME timestep.
+        // The next posedge executes exactly the instruction at PC=0.
+        // ---------------------------------------------------
         rst = 1'b1;
-
-        repeat (5)
-            @(posedge clk);
-
+        repeat (5) @(posedge clk);
+        #1;
         rst = 1'b0;
 
-        // Wait for reset release
-        @(posedge clk);
-
-
-        // =====================================================
-        // NOW INITIALIZE RANDOM REGISTERS
-        // =====================================================
-
-        // x0 is permanently zero
+        // Registers: random everywhere so stray writes are detectable
         core_block.regfile_block.registers[0] = 32'd0;
+        for (int i = 1; i < 32; i++)
+            core_block.regfile_block.registers[i] = $urandom;
 
         if (tr.rs1 != 0)
-            core_block.regfile_block.registers[tr.rs1] =
-                rs1_value;
-
+            core_block.regfile_block.registers[tr.rs1] = tr.rs1_val;
         if (tr.rs2 != 0)
-            core_block.regfile_block.registers[tr.rs2] =
-                rs2_value;
+            core_block.regfile_block.registers[tr.rs2] = tr.rs2_val;
 
+        // Data memory: random words 0..15
+        for (int i = 0; i < 16; i++)
+            core_block.dmem_block.memory[i] = $urandom;
 
-        // =====================================================
-        // INITIALIZE DATA MEMORY
-        // =====================================================
+        // Program: random instruction at 0, NOPs everywhere a jump can land
+        core_block.imem_block.mem[0] = instruction;
+        for (int i = 1; i < 40; i++)
+            core_block.imem_block.mem[i] = 32'h00000013;
 
-        old_memory = $urandom;
+        // Snapshots after initialization
+        for (int i = 0; i < 32; i++) begin
+            reg_snap[i] = core_block.regfile_block.registers[i];
+            exp_regs[i] = reg_snap[i];
+        end
+        for (int i = 0; i < 16; i++) begin
+            mem_snap[i] = core_block.dmem_block.memory[i];
+            exp_mem[i]  = mem_snap[i];
+        end
 
-        core_block.dmem_block.memory[0] =
-            old_memory;
-
-
-        // =====================================================
-        // LOAD RANDOM INSTRUCTION AT PC = 0
-        // =====================================================
-
-        core_block.imem_block.mem[0] =
-            instruction;
-
-
-        // Put NOPs after the randomized instruction.
-        // This prevents JAL/JALR from executing old program data.
-
-        core_block.imem_block.mem[1] =
-            32'h00000013;
-
-        core_block.imem_block.mem[2] =
-            32'h00000013;
-
-        core_block.imem_block.mem[3] =
-            32'h00000013;
-
-        core_block.imem_block.mem[4] =
-            32'h00000013;
-
-
-        // =====================================================
-        // EXPECTED VALUES
-        // =====================================================
-
+        // ---------------------------------------------------
+        // Expected values
+        // ---------------------------------------------------
         expected    = 32'd0;
         expected_pc = 32'd4;
+        taken       = 1'b0;
+        writes_rd   = 1'b0;
+        widx        = 0;
 
-
-        // =====================================================
-        // R-TYPE / I-TYPE ALU
-        // =====================================================
-
+        // R-type / I-type ALU
         if (tr.instr_type <= 18) begin
-
-            expected =
-                expected_alu_result(
-                    tr.instr_type,
-                    actual_rs1,
-                    actual_rs2,
-                    tr.imm
-                );
-
+            expected  = expected_alu_result(tr.instr_type, actual_rs1,
+                                            actual_rs2, imm32);
+            writes_rd = 1'b1;
         end
 
-
-        // =====================================================
-        // LOADS
-        // =====================================================
-
-        else if ((tr.instr_type >= 19) &&
-                 (tr.instr_type <= 23)) begin
-
+        // Loads (rs1 = x0, imm word-aligned, so byte 0 of the word)
+        else if (tr.instr_type <= 23) begin
+            widx = imm32[5:2];
             case (tr.instr_type)
-
-                // LB
-                19:
-                    expected =
-                        {{24{old_memory[7]}},
-                         old_memory[7:0]};
-
-                // LH
-                20:
-                    expected =
-                        {{16{old_memory[15]}},
-                         old_memory[15:0]};
-
-                // LW
-                21:
-                    expected = old_memory;
-
-                // LBU
-                22:
-                    expected =
-                        {24'b0, old_memory[7:0]};
-
-                // LHU
-                23:
-                    expected =
-                        {16'b0, old_memory[15:0]};
-
-                default:
-                    expected = 32'd0;
-
+                19: expected = {{24{mem_snap[widx][7]}},  mem_snap[widx][7:0]};
+                20: expected = {{16{mem_snap[widx][15]}}, mem_snap[widx][15:0]};
+                21: expected = mem_snap[widx];
+                22: expected = {24'b0, mem_snap[widx][7:0]};
+                23: expected = {16'b0, mem_snap[widx][15:0]};
             endcase
-
+            writes_rd = 1'b1;
         end
 
-
-        // =====================================================
-        // STORES
-        // =====================================================
-
-        else if ((tr.instr_type >= 24) &&
-                 (tr.instr_type <= 26)) begin
-
-            // Expected memory contents are handled below.
-            expected = actual_rs2;
-
-        end
-
-
-        // =====================================================
-        // BRANCHES
-        // =====================================================
-
-        else if ((tr.instr_type >= 27) &&
-                 (tr.instr_type <= 32)) begin
-
+        // Stores: merge into the old word
+        else if (tr.instr_type <= 26) begin
+            widx = imm32[5:2];
             case (tr.instr_type)
-
-                // BEQ
-                27:
-                    expected_pc =
-                        (actual_rs1 == actual_rs2) ?
-                        tr.imm : 32'd4;
-
-                // BNE
-                28:
-                    expected_pc =
-                        (actual_rs1 != actual_rs2) ?
-                        tr.imm : 32'd4;
-
-                // BLT
-                29:
-                    expected_pc =
-                        ($signed(actual_rs1) <
-                         $signed(actual_rs2)) ?
-                        tr.imm : 32'd4;
-
-                // BGE
-                30:
-                    expected_pc =
-                        ($signed(actual_rs1) >=
-                         $signed(actual_rs2)) ?
-                        tr.imm : 32'd4;
-
-                // BLTU
-                31:
-                    expected_pc =
-                        (actual_rs1 < actual_rs2) ?
-                        tr.imm : 32'd4;
-
-                // BGEU
-                32:
-                    expected_pc =
-                        (actual_rs1 >= actual_rs2) ?
-                        tr.imm : 32'd4;
-
-                default:
-                    expected_pc = 32'd4;
-
+                24: new_word = {mem_snap[widx][31:8],  actual_rs2[7:0]};
+                25: new_word = {mem_snap[widx][31:16], actual_rs2[15:0]};
+                26: new_word = actual_rs2;
             endcase
-
+            exp_mem[widx] = new_word;
         end
 
+        // Branches
+        else if (tr.instr_type <= 32) begin
+            case (tr.instr_type)
+                27: taken = (actual_rs1 == actual_rs2);
+                28: taken = (actual_rs1 != actual_rs2);
+                29: taken = ($signed(actual_rs1) <  $signed(actual_rs2));
+                30: taken = ($signed(actual_rs1) >= $signed(actual_rs2));
+                31: taken = (actual_rs1 <  actual_rs2);
+                32: taken = (actual_rs1 >= actual_rs2);
+            endcase
+            expected_pc = taken ? imm32 : 32'd4;
+        end
 
-        // =====================================================
-        // JAL
-        // =====================================================
-
+        // JAL (PC = 0, so target = imm)
         else if (tr.instr_type == 33) begin
-
-            expected = 32'd4;
-
-            // PC = 0, therefore target = immediate
-            expected_pc = tr.imm;
-
+            expected    = 32'd4;
+            expected_pc = imm32;
+            writes_rd   = 1'b1;
         end
 
-
-        // =====================================================
-        // JALR
-        // =====================================================
-
+        // JALR (rs1 = x0)
         else if (tr.instr_type == 34) begin
-
-            // Link address
-            expected = 32'd4;
-
-            // rs1 is constrained to x0
-            expected_pc =
-                tr.imm & 32'hFFFFFFFE;
-
+            expected    = 32'd4;
+            expected_pc = (actual_rs1 + imm32) & 32'hFFFFFFFE;
+            writes_rd   = 1'b1;
         end
 
-
-        // =====================================================
         // LUI
-        // =====================================================
-
         else if (tr.instr_type == 35) begin
-
-            expected =
-                {tr.u_imm, 12'b0};
-
+            expected  = {tr.u_imm, 12'b0};
+            writes_rd = 1'b1;
         end
 
-
-        // =====================================================
-        // AUIPC
-        // =====================================================
-
+        // AUIPC (PC = 0)
         else if (tr.instr_type == 36) begin
-
-            // PC = 0
-            expected =
-                {tr.u_imm, 12'b0};
-
+            expected  = {tr.u_imm, 12'b0};
+            writes_rd = 1'b1;
         end
 
+        // Writes to x0 must be ignored
+        if (writes_rd && tr.rd != 0)
+            exp_regs[tr.rd] = expected;
 
-        // =====================================================
-        // EXECUTE ONE INSTRUCTION
-        // =====================================================
-
+        // ---------------------------------------------------
+        // Execute one instruction
+        // ---------------------------------------------------
         @(posedge clk);
-
         #1;
 
+        // ---------------------------------------------------
+        // Compare PC, all registers, and dmem
+        // ---------------------------------------------------
+        test_ok = 1'b1;
 
-        // =====================================================
-        // CHECK REGISTER-WRITING INSTRUCTIONS
-        // =====================================================
-
-        if ((tr.instr_type <= 23) ||
-            (tr.instr_type == 33) ||
-            (tr.instr_type == 34) ||
-            (tr.instr_type == 35) ||
-            (tr.instr_type == 36)) begin
-
-            actual =
-                core_block.regfile_block.registers[tr.rd];
-
-
-            if (actual === expected) begin
-
-                $display(
-                    "[PASS] Test=%0d | %-5s | rd=x%0d | Expected=%h | Actual=%h",
-                    test,
-                    rv32i_name(tr.instr_type),
-                    tr.rd,
-                    expected,
-                    actual
-                );
-
-                pass_count++;
-
-            end
-            else begin
-
-                $display(
-                    "[FAIL] Test=%0d | %-5s | rd=x%0d | Expected=%h | Actual=%h",
-                    test,
-                    rv32i_name(tr.instr_type),
-                    tr.rd,
-                    expected,
-                    actual
-                );
-
-                fail_count++;
-
-            end
-
+        if (core_block.pc !== expected_pc) begin
+            $display("[FAIL] Test=%0d | %-5s | PC Expected=%h Actual=%h",
+                     test, rv32i_name(tr.instr_type),
+                     expected_pc, core_block.pc);
+            test_ok = 1'b0;
         end
 
-
-        // =====================================================
-        // CHECK STORE
-        // =====================================================
-
-        else if ((tr.instr_type >= 24) &&
-                 (tr.instr_type <= 26)) begin
-
-            actual =
-                core_block.dmem_block.memory[0];
-
-
-            case (tr.instr_type)
-
-                // -------------------------------------------------
-                // SB
-                // -------------------------------------------------
-
-                24: begin
-
-                    if (actual[7:0] ==
-                        actual_rs2[7:0]) begin
-
-                        $display(
-                            "[PASS] Test=%0d | SB | Expected Byte=%h | Actual Byte=%h",
-                            test,
-                            actual_rs2[7:0],
-                            actual[7:0]
-                        );
-
-                        pass_count++;
-
-                    end
-                    else begin
-
-                        $display(
-                            "[FAIL] Test=%0d | SB | Expected Byte=%h | Actual Byte=%h",
-                            test,
-                            actual_rs2[7:0],
-                            actual[7:0]
-                        );
-
-                        fail_count++;
-
-                    end
-
-                end
-
-
-                // -------------------------------------------------
-                // SH
-                // -------------------------------------------------
-
-                25: begin
-
-                    if (actual[15:0] ==
-                        actual_rs2[15:0]) begin
-
-                        $display(
-                            "[PASS] Test=%0d | SH | Expected Half=%h | Actual Half=%h",
-                            test,
-                            actual_rs2[15:0],
-                            actual[15:0]
-                        );
-
-                        pass_count++;
-
-                    end
-                    else begin
-
-                        $display(
-                            "[FAIL] Test=%0d | SH | Expected Half=%h | Actual Half=%h",
-                            test,
-                            actual_rs2[15:0],
-                            actual[15:0]
-                        );
-
-                        fail_count++;
-
-                    end
-
-                end
-
-
-                // -------------------------------------------------
-                // SW
-                // -------------------------------------------------
-
-                26: begin
-
-                    if (actual ==
-                        actual_rs2) begin
-
-                        $display(
-                            "[PASS] Test=%0d | SW | Expected=%h | Actual=%h",
-                            test,
-                            actual_rs2,
-                            actual
-                        );
-
-                        pass_count++;
-
-                    end
-                    else begin
-
-                        $display(
-                            "[FAIL] Test=%0d | SW | Expected=%h | Actual=%h",
-                            test,
-                            actual_rs2,
-                            actual
-                        );
-
-                        fail_count++;
-
-                    end
-
-                end
-
-            endcase
-
+        for (int i = 0; i < 32; i++) begin
+            if (core_block.regfile_block.registers[i] !== exp_regs[i]) begin
+                $display("[FAIL] Test=%0d | %-5s | x%0d Expected=%h Actual=%h (rd=x%0d rs1=x%0d rs2=x%0d imm=%0d)",
+                         test, rv32i_name(tr.instr_type), i,
+                         exp_regs[i],
+                         core_block.regfile_block.registers[i],
+                         tr.rd, tr.rs1, tr.rs2, imm32);
+                test_ok = 1'b0;
+            end
         end
 
-
-        // =====================================================
-        // CHECK BRANCH / JUMP PC
-        // =====================================================
-
-        else if ((tr.instr_type >= 27) &&
-                 (tr.instr_type <= 34)) begin
-
-            if (core_block.pc === expected_pc) begin
-
-                $display(
-                    "[PASS] Test=%0d | %-5s | Expected PC=%h | Actual PC=%h",
-                    test,
-                    rv32i_name(tr.instr_type),
-                    expected_pc,
-                    core_block.pc
-                );
-
-                pass_count++;
-
+        for (int i = 0; i < 16; i++) begin
+            if (core_block.dmem_block.memory[i] !== exp_mem[i]) begin
+                $display("[FAIL] Test=%0d | %-5s | dmem[%0d] Expected=%h Actual=%h",
+                         test, rv32i_name(tr.instr_type), i,
+                         exp_mem[i], core_block.dmem_block.memory[i]);
+                test_ok = 1'b0;
             end
-            else begin
-
-                $display(
-                    "[FAIL] Test=%0d | %-5s | Expected PC=%h | Actual PC=%h",
-                    test,
-                    rv32i_name(tr.instr_type),
-                    expected_pc,
-                    core_block.pc
-                );
-
-                fail_count++;
-
-            end
-
         end
+
+                if (test_ok) begin
+            pass_count++;
+        end
+        else begin
+            fail_count++;
+            fail_by_type[tr.instr_type]++;
+        end
+
+        // ---------------------------------------------------
+        // Coverage
+        // ---------------------------------------------------
+        tr.taken = taken;
+        tr.cg.sample();
 
     end
 
-
     // =========================================================
-    // FINAL SUMMARY
+    // Summary
     // =========================================================
-
     $display("");
     $display("======================================================");
     $display("       CONSTRAINT-RANDOM TEST COMPLETED");
     $display("======================================================");
-
-    $display(
-        "TOTAL RANDOM TESTS = 1000"
-    );
-
-    $display(
-        "PASS CHECKS        = %0d",
-        pass_count
-    );
-
-    $display(
-        "FAIL CHECKS        = %0d",
-        fail_count
-    );
-
+        $display("---- Failures by instruction type ----");
+    for (int i = 0; i < 37; i++)
+        if (fail_by_type[i] != 0)
+            $display("%-5s failed %0d times", rv32i_name(i), fail_by_type[i]);
+    $display("--------------------------------------");
+    $display("TOTAL TESTS  = 1000");
+    $display("PASSED       = %0d", pass_count);
+    $display("FAILED       = %0d", fail_count);
+    $display("COVERAGE     = %0.2f%%", tr.cg.get_inst_coverage());
     $display("======================================================");
 
 endtask
+
 //main block
 initial begin
 
 load_program();
+connectivity_check();
 check_clock();
 check_reset();
 boot_check();
@@ -1880,8 +1620,7 @@ check_reset();
 boot_check_lowpower_wake();
 check_reset();
 boot_check_debug_mode();
-check_reset();    // re-sync PC back to 0 before connectivity_check
-connectivity_check();
+
 
 
 
@@ -1889,9 +1628,6 @@ repeat(40)
 @(posedge clk);
 
 check_results(); 
-  constraint_random_rv32i_test();
+verbose = 0;
+constraint_random_rv32i_test();
 $finish;
-
-end
-
-endmodule
